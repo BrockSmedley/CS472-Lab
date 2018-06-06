@@ -89,14 +89,20 @@ static unsigned int max_insts;
 /* level 1 instruction cache, entry level instruction cache */
 static struct cache_t *cache_il1 = NULL;
 
-/* level 1 instruction cache */
+/* level 2 instruction cache */
 static struct cache_t *cache_il2 = NULL;
+
+/* level 3 instruction cache */
+static struct cache_t *cache_il3 = NULL;
 
 /* level 1 data cache, entry level data cache */
 static struct cache_t *cache_dl1 = NULL;
 
 /* level 2 data cache */
 static struct cache_t *cache_dl2 = NULL;
+
+/* level 3 data cache */
+static struct cache_t *cache_dl3 = NULL;
 
 /* instruction TLB */
 static struct cache_t *itlb = NULL;
@@ -151,7 +157,7 @@ dl2_access_fn(enum mem_cmd cmd,		/* access cmd, Read or Write */
 {
   /* Try to access lower level cache */
   if (cache_dl3) {
-    return cache_access(cache_dl3, cmd, baddr, NULL, nsize,
+    return cache_access(cache_dl3, cmd, baddr, NULL, bsize,
 			/* now */now, /* pudata */NULL, /* repl addr */NULL);
   }
   /* access main memory, which is
@@ -348,7 +354,7 @@ sim_reg_options(struct opt_odb_t *odb)	/* options database */
 "\n"
 "    Or, a fully unified cache hierarchy (il1 pointed at dl1):\n"
 "      -cache:il1 dl1\n"
-"      -cache:dl1 ul1:256:32:1:l -cache:dl2 ul2:1024:64:2:l\n"
+"      -cache:dl1 ul1:256:32:1:l -cache:dl2 ul2:1024:64:2:l -cache:dl3 ul3:4096:64:2:l\n"
 	       );
   opt_reg_string(odb, "-cache:il2",
 		 "l2 instruction cache config, i.e., {<config>|dl2|none}",
@@ -473,19 +479,28 @@ sim_check_options(struct opt_odb_t *odb,	/* options database */
       if (strcmp(cache_il2_opt, "none"))
 	fatal("the l1 inst cache must defined if the l2 cache is defined");
       cache_il2 = NULL;
-    }
-  else if (!mystricmp(cache_il2opt, "dl3"))
+      /* the level 3 I-cache cannot be defined */
+      if (strcmp(cache_il3_opt, "none"))
+	fatal("the l1 inst cache must defined if the l3 cache is defined");
+      cache_il3 = NULL;
+   }
+  else if (!mystricmp(cache_il1_opt, "dl3"))
     {
       if (!cache_dl3)
 	fatal("I-cache l2 cannot access D-cache l3 as it's undefined");
-      cache_il2 = cache_dl3;
+      cache_il1 = cache_dl3;
 
       /* the level 2 I-cache cannot be defined */
-      if (strcmp(cache_il3_opt, "none"))
+      if (strcmp(cache_il2_opt, "none"))
 	fatal("the l2 inst cache must defined if the l3 cache is defined");
+      cache_il2 = NULL;
+ 
+      /* the level 2 I-cache cannot be defined */
+      if (strcmp(cache_il3_opt, "none"))
+	fatal("the l3 inst cache must defined if the l3 cache is defined");
       cache_il3 = NULL;
-    }
- else /* il1 is defined */
+   }
+else /* il1 is defined */
     {
       if (sscanf(cache_il1_opt, "%[^:]:%d:%d:%d:%c",
 		 name, &nsets, &bsize, &assoc, &c) != 5)
@@ -638,10 +653,15 @@ sim_reg_stats(struct stat_sdb_t *sdb)	/* stats database */
   if (cache_il2
       && (cache_il2 != cache_dl1 && cache_il2 != cache_dl2))
     cache_reg_stats(cache_il2, sdb);
+  if (cache_il3
+      && (cache_il3 != cache_dl1 && cache_il3 != cache_dl2))
+    cache_reg_stats(cache_il3, sdb);
   if (cache_dl1)
     cache_reg_stats(cache_dl1, sdb);
   if (cache_dl2)
     cache_reg_stats(cache_dl2, sdb);
+  if (cache_dl3)
+    cache_reg_stats(cache_dl3, sdb);
   if (itlb)
     cache_reg_stats(itlb, sdb);
   if (dtlb)
